@@ -1,8 +1,10 @@
+# collect.py
 import cv2
 import mediapipe as mp
 import pandas as pd
 import numpy as np
 import os, time, argparse
+from utils import normalize_landmarks_xyz
 
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -10,20 +12,10 @@ os.makedirs(DATA_DIR, exist_ok=True)
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
-
-def normalize_landmarks(coords):
-    coords = np.array(coords).reshape(-1, 3)
-    base = coords[0]
-    coords = coords - base
-    max_val = np.max(np.abs(coords))
-    coords = coords / (max_val + 1e-6)
-    return coords.flatten().tolist()
-
-
 def collect(label, duration=15):
     csv_path = os.path.join(DATA_DIR, "hand_dataset.csv")
     cap = cv2.VideoCapture(0)
-    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1)
+    hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
 
     start = time.time()
     rows = []
@@ -41,8 +33,10 @@ def collect(label, duration=15):
                 coords = []
                 for lm in hand_landmarks.landmark:
                     coords.extend([lm.x, lm.y, lm.z])
-                coords = normalize_landmarks(coords)
-                rows.append([label] + coords)
+                norm_coords, _ = normalize_landmarks_xyz(coords)
+                if norm_coords is None:
+                    continue
+                rows.append([label] + norm_coords)
 
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
@@ -54,6 +48,10 @@ def collect(label, duration=15):
     cap.release()
     cv2.destroyAllWindows()
     hands.close()
+
+    if len(rows) == 0:
+        print("No samples collected.")
+        return
 
     df = pd.DataFrame(rows)
     header = ["label"] + [f"{a}_{i}" for i in range(21) for a in ("x","y","z")]

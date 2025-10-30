@@ -1,3 +1,4 @@
+# extract_landmarks.py
 import cv2
 import mediapipe as mp
 import pandas as pd
@@ -33,12 +34,12 @@ with mp_hands.Hands(static_image_mode=True, max_num_hands=1,
             hand = results.multi_hand_landmarks[0]
             coords = []
             for lm in hand.landmark:
-                coords.extend([lm.x, lm.y])  # You can add lm.z later if you want depth info
+                coords.extend([lm.x, lm.y, getattr(lm, 'z', 0.0)])  # include z or pad 0.0
             row = [gesture] + coords
             rows.append(row)
 
 # Save to CSV
-cols = ["label"] + [f"lm{i}" for i in range(42)]
+cols = ["label"] + [f"{a}_{i}" for i in range(21) for a in ("x","y","z")]
 df = pd.DataFrame(rows, columns=cols)
 df.to_csv(OUT_CSV, index=False)
 print(f"✅ Extracted {len(df)} samples from {len(gestures)} gestures.")
